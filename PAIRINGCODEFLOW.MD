@@ -27,6 +27,27 @@ JSON
   "verification_token": "TOKEN_HERE",
   "telegram_user_id": "TELEGRAM_ID_HERE"
 }
+
+4. Response Handling
+If the API returns success, parse the response and send the confirmation message to the Telegram user ID.
+Use the returned linked email and Telegram user ID to format the notification.
+
+Expected success response shape:
+
+```json
+{
+  "success": true,
+  "message": "Successfully linked email user@company.com to Telegram user ID 87492025",
+  "data": {
+    "email": "user@company.com",
+    "telegram_user_id": "87492025",
+    "telegram_verified": true,
+    "linked_at": "2026-05-24T15:42:11Z"
+  }
+}
+```
+
+If the API returns an error, do not send a success message. Surface the error state and keep the pairing pending.
 💬 Dialogue Examples (Tone & Vibe)
 English Interaction
 User: /start

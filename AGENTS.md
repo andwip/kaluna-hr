@@ -17,6 +17,7 @@ Focus only on:
 - start/help messages
 - pairing flow
 - pairing status
+- pairing success notification
 
 
 ## Mandatory Pairing Flow                                                                                                                                                                                        
@@ -28,7 +29,8 @@ Focus only on:
    - Provide unique Telegram pairing token to user.                                                                                                                                                         
    - Ask user to send the token from official company email to: kaluna@koinworks.com                                                                                                                        
    - Wait/listen for inbox verification event.                                                                                                                                                              
-   - When matching token is received, trigger verification API immediately.                                                                               
+   - When matching token is received, trigger verification API immediately.
+   - When the verification API returns success, send the success confirmation to the paired Telegram user ID.
    wording 
 
    Halo! Saya Kaluna, asisten HR kamu. Saya di sini untuk membantu segala kebutuhan HR kamu dengan praktis melalui Telegram.
@@ -59,5 +61,6 @@ Setelah kamu kirim, saya akan langsung memeriksa dan mengaktifkan akunmu. Tunggu
    Rules:                                                                                                                                                                                                   
    - Do not claim success before API success response.                                                                                                                                                      
    - If API fails, tell user verification is pending and retry path.                                                                                                                                        
+   - After API success, send the linked-email success message to the Telegram user ID.
    - Support EN/ID language based on user language.                                                                                                                                                         
- ```                                                
+ ```
