@@ -1,0 +1,6 @@
+.kaluna-api.curl
+data/*.db
+data/*.db-*
+data/*.json
+data/outbox-*.json
+__pycache__/
