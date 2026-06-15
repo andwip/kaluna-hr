@@ -60,7 +60,7 @@ The local wrappers use this config file internally. Do not read or print it.
 Resolve every Telegram sender before employee-specific work:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py resolve-channel TELEGRAM_ID
+./kaluna-local-store.py resolve-channel TELEGRAM_ID
 ```
 
 Linked response includes:
@@ -77,13 +77,13 @@ Linked response includes:
 Normal conversation flow must use the local SQLite snapshot and outbox:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py list employees --limit 3
+./kaluna-local-store.py list employees --limit 3
 ```
 
 Short wrapper:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-read.sh employees 3
+./kaluna-local-read.sh employees 3
 ```
 
 Available local snapshot collections:
@@ -106,25 +106,25 @@ Use live API reads only when explicitly refreshing the local snapshot or debuggi
 Policy topic from local snapshot:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py list policy --limit 20
+./kaluna-local-store.py list policy --limit 20
 ```
 
 Specific employee record:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py get employees EMPLOYEE_ID
+./kaluna-local-store.py get employees EMPLOYEE_ID
 ```
 
 Daily status from local attendance snapshot:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py list attendance --limit 20
+./kaluna-local-store.py list attendance --limit 20
 ```
 
 Pending or completed pairing tickets:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py list channel_pair_tickets --limit 20
+./kaluna-local-store.py list channel_pair_tickets --limit 20
 ```
 
 ### Write Actions
@@ -139,13 +139,13 @@ Before `/api/leave/request`, `/api/attendance/correction/request`, or admin appr
 Queue format:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py enqueue leave_request /api/leave/request '{"employee_id":"EMPLOYEE_ID"}'
+./kaluna-local-store.py enqueue leave_request /api/leave/request '{"employee_id":"EMPLOYEE_ID"}'
 ```
 
 Canonical leave request payload:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py enqueue leave_request /api/leave/request '{"employee_id":"EMPLOYEE_ID","leave_type":"sick","start_date":"2026-05-29","end_date":"2026-05-29","total_days":1,"reason":"lagi meriang"}'
+./kaluna-local-store.py enqueue leave_request /api/leave/request '{"employee_id":"EMPLOYEE_ID","leave_type":"sick","start_date":"2026-05-29","end_date":"2026-05-29","total_days":1,"reason":"lagi meriang"}'
 ```
 
 Required fields are `employee_id`, `leave_type`, `start_date`, `end_date`, and `total_days`; `reason` is required for sick leave and optional for other leave types. Do not use `date`, `duration`, `start_time`, or `end_time` for full-day leave requests.
@@ -178,18 +178,20 @@ Do not use typed coordinates, forwarded messages, forwarded locations, screensho
 Only call these endpoints when the current or immediately previous message from the same sender contains one of the trusted location markers above, the marker is in the current message body rather than reply context, and the message is not forwarded:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py enqueue check_in /api/attendance/check-in '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271}'
+./kaluna-local-store.py enqueue check_in /api/attendance/check-in '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271}'
 ```
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py enqueue check_out /api/attendance/check-out '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271}'
+./kaluna-local-store.py enqueue check_out /api/attendance/check-out '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271}'
 ```
 
-If a synced API response returns `code: "purpose_required"` or `requires_purpose: true`, collect the Sales field-work purpose and requeue with `purpose`:
+For `sales` department employees outside the approved office geofence, collect the field-work purpose before queueing. Department matching is trim + lowercase, so `sales`, `Sales`, and `SALES` all match. The local store adds `is_outside_geofence: true` and `geofence_exception: "sales_department"` before async sync:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py enqueue check_in /api/attendance/check-in '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271,"purpose":"Client visit to ..."}'
+./kaluna-local-store.py enqueue check_in /api/attendance/check-in '{"employee_id":"EMPLOYEE_ID","latitude":-6.1751,"longitude":106.8271,"purpose":"Client visit to ..."}'
 ```
+
+If a synced API response still returns `code: "purpose_required"` or `requires_purpose: true`, collect the Sales field-work purpose and requeue with `purpose`.
 
 If a synced API response returns `status: "invalid_location"` or `suggested_next_action.type: "ask_wfh_today"`, ask whether the employee is WFH today. For a yes answer, draft an `/api/attendance/correction/request` payload with a WFH reason and queue it only after explicit confirmation.
 
@@ -198,26 +200,26 @@ If a synced API response returns `status: "invalid_location"` or `suggested_next
 Refresh pairing tickets from the API into the local SQLite snapshot:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-api-get.sh /api/auth/channel/pending > /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py import-collection channel_pair_tickets /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
+./kaluna-api-get.sh /api/auth/channel/pending > /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
+./kaluna-local-store.py import-collection channel_pair_tickets /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
 ```
 
 Import the main dashboard snapshot:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py import-snapshot /home/sre/.openclaw/workspace-kaluna-employee/data/firestore-dashboard-all.json
+./kaluna-local-store.py import-snapshot /home/sre/.openclaw/workspace-kaluna-employee/data/firestore-dashboard-all.json
 ```
 
 Inspect outbox state:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py status
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-status.sh
+./kaluna-local-store.py status
+./kaluna-local-status.sh
 ```
 
 Process queued writes against the API:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py sync --limit 10 --verbose
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-sync.sh 10
+./kaluna-local-store.py sync --limit 10 --verbose
+./kaluna-local-sync.sh 10
 ```

@@ -141,7 +141,7 @@ After sync succeeds, Kaluna can report the API result.
 
 If the employee is outside the approved geofence:
 
-- For Sales department profiles, Kaluna asks for the field-work purpose. After the employee states the purpose, Kaluna requeues the attendance request with `purpose`.
+- For `sales` department profiles, Kaluna asks for the field-work purpose. Department matching is trim + lowercase, so `Sales` and `SALES` also match. After the employee states the purpose, Kaluna queues the attendance request with `purpose`; the local outbox payload includes `is_outside_geofence: true` and `geofence_exception: "sales_department"`.
 - For non-Sales profiles, Kaluna asks: `Lokasi kamu di luar area kantor. Apakah kamu WFH hari ini?`
 - If the employee confirms WFH, Kaluna offers to draft an attendance correction/WFH request and queues it only after explicit confirmation.
 - If the employee is not WFH, Kaluna asks them to retry from an approved office location or contact HR/admin.

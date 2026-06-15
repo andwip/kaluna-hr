@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import json
+import math
 import os
 import sqlite3
 import subprocess
@@ -22,6 +23,10 @@ COLLECTIONS = [
     "audit_logs",
     "agent",
 ]
+ATTENDANCE_ENDPOINTS = {
+    "/api/attendance/check-in",
+    "/api/attendance/check-out",
+}
 
 
 def now():
@@ -187,11 +192,143 @@ def resolve_channel(args):
     }, indent=2))
 
 
+def snapshot_docs(con, collection):
+    rows = con.execute(
+        "select body from snapshot where collection=?",
+        (collection,),
+    ).fetchall()
+    return [json.loads(row["body"]) for row in rows]
+
+
+def find_employee(con, employee_id):
+    for employee in snapshot_docs(con, "employees"):
+        ids = [
+            str(employee.get("employee_id") or ""),
+            str(employee.get("id") or ""),
+        ]
+        if str(employee_id) in ids:
+            return employee
+    return None
+
+
+def normalize_department(value):
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def is_sales_employee(employee):
+    return normalize_department((employee or {}).get("department")) == "sales"
+
+
+def to_float(value, field):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be a number")
+
+
+def haversine_meter(lat1, lon1, lat2, lon2):
+    radius = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def candidate_locations(con, employee, payload):
+    locations = snapshot_docs(con, "locations")
+    requested_id = payload.get("location_id")
+    approved_id = (
+        requested_id
+        or (employee or {}).get("approved_location_id")
+        or (employee or {}).get("location")
+    )
+    if approved_id:
+        scoped = [
+            location for location in locations
+            if str(location.get("location_id") or location.get("id") or "") == str(approved_id)
+        ]
+        if scoped:
+            return scoped
+    return locations
+
+
+def nearest_geofence(con, employee, payload):
+    latitude = to_float(payload.get("latitude"), "latitude")
+    longitude = to_float(payload.get("longitude"), "longitude")
+    nearest = None
+
+    for location in candidate_locations(con, employee, payload):
+        if location.get("latitude") is None or location.get("longitude") is None:
+            continue
+        distance = haversine_meter(
+            latitude,
+            longitude,
+            to_float(location.get("latitude"), "location.latitude"),
+            to_float(location.get("longitude"), "location.longitude"),
+        )
+        radius = to_float(location.get("radius_meter") or location.get("radius_meters") or 0, "radius_meter")
+        current = {
+            "location_id": location.get("location_id") or location.get("id"),
+            "distance_meter": round(distance, 2),
+            "radius_meter": radius,
+            "inside": distance <= radius,
+        }
+        if nearest is None or current["distance_meter"] < nearest["distance_meter"]:
+            nearest = current
+
+    return nearest
+
+
+def enrich_attendance_payload(con, endpoint, payload):
+    if endpoint not in ATTENDANCE_ENDPOINTS:
+        return payload
+    if "latitude" not in payload or "longitude" not in payload:
+        return payload
+
+    employee_id = payload.get("employee_id")
+    employee = find_employee(con, employee_id)
+    if not employee:
+        raise ValueError("employee not found in local snapshot")
+
+    geofence = nearest_geofence(con, employee, payload)
+    if not geofence:
+        raise ValueError("office geofence not found in local snapshot")
+    if geofence["inside"]:
+        return payload
+
+    payload = dict(payload)
+    payload["is_outside_geofence"] = True
+    payload["nearest_location_id"] = geofence["location_id"]
+    payload["nearest_location_distance_meter"] = geofence["distance_meter"]
+    payload["nearest_location_radius_meter"] = geofence["radius_meter"]
+
+    if is_sales_employee(employee):
+        if not str(payload.get("purpose") or "").strip():
+            raise ValueError("purpose is required for sales outside geofence attendance")
+        payload["geofence_exception"] = "sales_department"
+        return payload
+
+    raise ValueError("outside geofence attendance is only allowed for sales employees")
+
+
 def enqueue(args):
     con = connect()
     init_db(con)
-    payload = args.payload
-    json.loads(payload)
+    try:
+        payload_obj = json.loads(args.payload)
+        if not isinstance(payload_obj, dict):
+            raise ValueError("payload must be a JSON object")
+        payload_obj = enrich_attendance_payload(con, args.endpoint, payload_obj)
+        payload = json.dumps(payload_obj, separators=(",", ":"))
+    except ValueError as exc:
+        print(json.dumps({"queued": False, "error": str(exc)}, indent=2), file=sys.stderr)
+        sys.exit(1)
+
     oid = str(uuid.uuid4())
     con.execute(
         """insert into outbox(id, action, endpoint, payload, status, created_at, updated_at)

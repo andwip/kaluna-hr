@@ -2,7 +2,7 @@
 When a user initiates a conversation with `kaluna-employee` on Telegram or asks for help, first resolve their channel identity:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py resolve-channel TELEGRAM_ID
+kaluna-local-store.py resolve-channel TELEGRAM_ID
 ```
 
 - If the user is already OpenClaw-approved / linked, do not show pairing instructions again.
@@ -85,14 +85,14 @@ If the API returns an error, do not send a success message. Surface the error st
 For local inspection of pairing state, use the local snapshot:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py list channel_pair_tickets --limit 20
+kaluna-local-store.py list channel_pair_tickets --limit 20
 ```
 
 Refresh pairing tickets into the local snapshot only when explicitly needed:
 
 ```bash
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-api-get.sh /api/auth/channel/pending > /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
-/home/sre/.openclaw/workspace-kaluna-employee/kaluna-local-store.py import-collection channel_pair_tickets /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
+kaluna-api-get.sh /api/auth/channel/pending > /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
+kaluna-local-store.py import-collection channel_pair_tickets /home/sre/.openclaw/workspace-kaluna-employee/data/channel-pair-tickets.json
 ```
 
 5. Linked User Response
